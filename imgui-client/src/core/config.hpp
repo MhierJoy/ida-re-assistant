@@ -3,10 +3,12 @@
 namespace ida_re::core {
     struct app_config_t {
         // LLM settings
-        std::string m_provider { "gemini" }; // claude, openai, gemini
+        std::string m_provider { "gemini" }; // claude, openai, gemini, openrouter
         std::string m_claude_api_key { };
         std::string m_openai_api_key { };
         std::string m_gemini_api_key { };
+        std::string m_openrouter_api_key { };
+        bool        m_openrouter_free_only { true };
         std::string m_model { "gemini-2.0-flash-exp" };
         int         m_max_tokens { 4096 };
 
@@ -52,17 +54,19 @@ namespace ida_re::core {
                 std::ifstream f( path );
                 json_t        j = json_t::parse( f );
 
-                m_provider       = j.value( "provider", "gemini" );
-                m_claude_api_key = j.value( "claude_api_key", j.value( "api_key", "" ) ); // backward compat
-                m_openai_api_key = j.value( "openai_api_key", "" );
-                m_gemini_api_key = j.value( "gemini_api_key", "" );
-                m_model          = j.value( "model", "gemini-2.0-flash-exp" );
-                m_max_tokens     = j.value( "max_tokens", 4096 );
-                m_mcp_host       = j.value( "mcp_host", "127.0.0.1" );
-                m_mcp_port       = j.value( "mcp_port", 13120 );
-                m_auto_connect   = j.value( "auto_connect", false );
-                m_ui_scale       = j.value( "ui_scale", 1.0f );
-                m_enable_cache   = j.value( "enable_cache", true );
+                m_provider             = j.value( "provider", "gemini" );
+                m_claude_api_key       = j.value( "claude_api_key", j.value( "api_key", "" ) ); // backward compat
+                m_openai_api_key       = j.value( "openai_api_key", "" );
+                m_gemini_api_key       = j.value( "gemini_api_key", "" );
+                m_openrouter_api_key   = j.value( "openrouter_api_key", "" );
+                m_openrouter_free_only = j.value( "openrouter_free_only", true );
+                m_model                = j.value( "model", "gemini-2.0-flash-exp" );
+                m_max_tokens           = j.value( "max_tokens", 4096 );
+                m_mcp_host             = j.value( "mcp_host", "127.0.0.1" );
+                m_mcp_port             = j.value( "mcp_port", 13120 );
+                m_auto_connect         = j.value( "auto_connect", false );
+                m_ui_scale             = j.value( "ui_scale", 1.0f );
+                m_enable_cache         = j.value( "enable_cache", true );
 
                 return true;
             } catch ( ... ) {
@@ -77,17 +81,19 @@ namespace ida_re::core {
                 std::filesystem::create_directories( path.parent_path( ) );
 
                 json_t j = {
-                    {       "provider",       m_provider },
-                    { "claude_api_key", m_claude_api_key },
-                    { "openai_api_key", m_openai_api_key },
-                    { "gemini_api_key", m_gemini_api_key },
-                    {          "model",          m_model },
-                    {     "max_tokens",     m_max_tokens },
-                    {       "mcp_host",       m_mcp_host },
-                    {       "mcp_port",       m_mcp_port },
-                    {   "auto_connect",   m_auto_connect },
-                    {       "ui_scale",       m_ui_scale },
-                    {   "enable_cache",   m_enable_cache }
+                    {           "provider",           m_provider },
+                    {     "claude_api_key",     m_claude_api_key },
+                    {     "openai_api_key",     m_openai_api_key },
+                    {     "gemini_api_key",     m_gemini_api_key },
+                    { "openrouter_api_key", m_openrouter_api_key },
+                    { "openrouter_free_only", m_openrouter_free_only },
+                    {              "model",              m_model },
+                    {         "max_tokens",         m_max_tokens },
+                    {           "mcp_host",           m_mcp_host },
+                    {           "mcp_port",           m_mcp_port },
+                    {       "auto_connect",       m_auto_connect },
+                    {           "ui_scale",           m_ui_scale },
+                    {       "enable_cache",       m_enable_cache }
                 };
 
                 std::ofstream f( path );

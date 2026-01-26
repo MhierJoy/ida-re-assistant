@@ -566,6 +566,251 @@ namespace ida_re::api {
         } );
     }
 
+    // ==================== OpenRouter ====================
+
+    json_t c_openrouter::make_body( const std::vector< message_t > &msgs, bool stream ) const {
+        json_t messages = json_t::array( );
+
+        if ( !m_config.m_system_prompt.empty( ) ) {
+            messages.push_back( {
+                {    "role",                 "system" },
+                { "content", m_config.m_system_prompt }
+            } );
+        }
+
+        for ( const auto &m : msgs ) {
+            messages.push_back( {
+                {    "role",    m.m_role },
+                { "content", m.m_content }
+            } );
+        }
+
+        json_t body = {
+            {      "model",      m_config.m_model },
+            { "max_tokens", m_config.m_max_tokens },
+            {   "messages",              messages }
+        };
+
+        if ( stream ) {
+            body[ "stream" ] = true;
+        }
+
+        return body;
+    }
+
+    response_t c_openrouter::send( std::string_view message ) {
+        return send( std::vector< message_t > { message_t::user( message ) } );
+    }
+
+    response_t c_openrouter::send( const std::vector< message_t > &messages ) {
+        return request( make_body( messages, false ) );
+    }
+
+    void c_openrouter::stream( std::string_view message, stream_callback_t cb ) {
+        stream( std::vector< message_t > { message_t::user( message ) }, cb );
+    }
+
+    void c_openrouter::stream( const std::vector< message_t > &messages, stream_callback_t cb ) {
+        stream_request( make_body( messages, true ), cb );
+    }
+
+    response_t c_openrouter::request( const json_t &body ) {
+        guard_t    guard( m_busy, m_cancel );
+        response_t resp;
+        resp.m_provider = e_provider::openrouter;
+
+        auto cfg = snapshot( );
+        if ( cfg.m_api_key.empty( ) ) {
+            resp.m_error = "API key not set";
+            return resp;
+        }
+
+        httplib::SSLClient client( "openrouter.ai", 443 );
+        client.set_connection_timeout( 30 );
+        client.set_read_timeout( 120 );
+
+        httplib::Headers headers = {
+            { "Authorization", "Bearer " + cfg.m_api_key },
+            {  "content-type",          "application/json" },
+            { "HTTP-Referer",   "https://github.com/W1lliam1337/ida-re-assistant" },
+            {    "X-Title",                "IDA RE Assistant" }
+        };
+
+        auto result = client.Post( "/api/v1/chat/completions", headers, body.dump( ), "application/json" );
+
+        if ( !result ) {
+            resp.m_error = "Request failed: " + httplib::to_string( result.error( ) );
+            return resp;
+        }
+
+        if ( result->status != 200 ) {
+            try {
+                auto err = json_t::parse( result->body );
+                if ( err.contains( "error" ) && err[ "error" ].contains( "message" ) ) {
+                    resp.m_error = err[ "error" ][ "message" ].get< std::string >( );
+                } else {
+                    resp.m_error = result->body;
+                }
+            } catch ( ... ) {
+                resp.m_error = "HTTP " + std::to_string( result->status );
+            }
+            return resp;
+        }
+
+        try {
+            auto j = json_t::parse( result->body );
+
+            if ( j.contains( "choices" ) && !j[ "choices" ].empty( ) ) {
+                auto &choice = j[ "choices" ][ 0 ];
+                if ( choice.contains( "message" ) ) {
+                    resp.m_content = choice[ "message" ].value( "content", "" );
+                }
+                resp.m_finish_reason = choice.value( "finish_reason", "" );
+            }
+
+            if ( j.contains( "usage" ) ) {
+                resp.m_usage.m_input  = j[ "usage" ].value( "prompt_tokens", 0 );
+                resp.m_usage.m_output = j[ "usage" ].value( "completion_tokens", 0 );
+            }
+
+            resp.m_model   = j.value( "model", cfg.m_model );
+            resp.m_success = true;
+
+        } catch ( const std::exception &e ) {
+            resp.m_error = std::string( "Parse error: " ) + e.what( );
+        }
+
+        return resp;
+    }
+
+    void c_openrouter::stream_request( const json_t &body, stream_callback_t cb ) {
+        guard_t guard( m_busy, m_cancel );
+
+        auto cfg = snapshot( );
+        if ( cfg.m_api_key.empty( ) || !cb )
+            return;
+
+        httplib::SSLClient client( "openrouter.ai", 443 );
+        client.set_connection_timeout( 30 );
+        client.set_read_timeout( 120 );
+
+        httplib::Headers headers = {
+            { "Authorization", "Bearer " + cfg.m_api_key },
+            {  "content-type",          "application/json" },
+            { "HTTP-Referer",   "https://github.com/W1lliam1337/ida-re-assistant" },
+            {    "X-Title",                "IDA RE Assistant" }
+        };
+
+        std::string buffer;
+
+        client.Post( "/api/v1/chat/completions", headers, body.dump( ), "application/json", [ & ]( const char *data, size_t len ) -> bool {
+            if ( guard.cancelled( ) )
+                return false;
+
+            buffer.append( data, len );
+
+            size_t pos;
+            while ( ( pos = buffer.find( '\n' ) ) != std::string::npos ) {
+                std::string line = buffer.substr( 0, pos );
+                buffer.erase( 0, pos + 1 );
+
+                if ( line.empty( ) )
+                    continue;
+
+                if ( line.rfind( "data: ", 0 ) == 0 ) {
+                    std::string json_str = line.substr( 6 );
+                    if ( json_str == "[DONE]" )
+                        continue;
+
+                    try {
+                        auto j = json_t::parse( json_str );
+                        if ( j.contains( "choices" ) && !j[ "choices" ].empty( ) ) {
+                            auto &delta = j[ "choices" ][ 0 ][ "delta" ];
+                            if ( delta.contains( "content" ) ) {
+                                std::string text = delta[ "content" ].get< std::string >( );
+                                if ( !text.empty( ) )
+                                    cb( text );
+                            }
+                        }
+                    } catch ( ... ) { }
+                }
+            }
+            return true;
+        } );
+    }
+
+    std::vector< model_t > c_openrouter::parse_models_response( const json_t &data ) {
+        std::vector< model_t > models;
+
+        if ( !data.contains( "data" ) || !data[ "data" ].is_array( ) )
+            return models;
+
+        for ( const auto &model : data[ "data" ] ) {
+            std::string id   = model.value( "id", "" );
+            std::string name = model.value( "name", id );
+            int         ctx  = model.value( "context_length", 0 );
+
+            if ( id.empty( ) )
+                continue;
+
+            // Check if free model (ends with :free)
+            bool is_free = id.ends_with( ":free" );
+
+            // Filter by free_only setting
+            if ( m_show_free_only && !is_free )
+                continue;
+
+            models.push_back( {
+                id,
+                name,
+                e_provider::openrouter,
+                ctx,
+                true // streaming supported
+            } );
+        }
+
+        // Sort: free models first, then by name
+        std::ranges::sort( models, []( const model_t &a, const model_t &b ) {
+            bool a_free = a.m_id.ends_with( ":free" );
+            bool b_free = b.m_id.ends_with( ":free" );
+            if ( a_free != b_free )
+                return a_free > b_free;
+            return a.m_name < b.m_name;
+        } );
+
+        return models;
+    }
+
+    std::vector< model_t > c_openrouter::fetch_models( bool force_refresh ) {
+        auto now = std::chrono::steady_clock::now( );
+
+        // Return cached if valid
+        if ( !force_refresh && !m_cached_models.empty( ) && ( now - m_models_fetched_at ) < k_cache_duration ) {
+            return m_cached_models;
+        }
+
+        httplib::SSLClient client( "openrouter.ai", 443 );
+        client.set_connection_timeout( 15 );
+        client.set_read_timeout( 30 );
+
+        auto result = client.Get( "/api/v1/models" );
+
+        if ( !result || result->status != 200 ) {
+            // Return cached on error
+            return m_cached_models;
+        }
+
+        try {
+            auto data        = json_t::parse( result->body );
+            m_cached_models  = parse_models_response( data );
+            m_models_fetched_at = now;
+        } catch ( ... ) {
+            // Keep cached on parse error
+        }
+
+        return m_cached_models;
+    }
+
     // ==================== Manager ====================
 
     response_t c_llm_manager::send( std::string_view message ) {
@@ -576,6 +821,8 @@ namespace ida_re::api {
                 return m_openai.send( message );
             case e_provider::gemini :
                 return m_gemini.send( message );
+            case e_provider::openrouter :
+                return m_openrouter.send( message );
         }
         return response_t { .m_error = "Unknown provider" };
     }
@@ -588,6 +835,8 @@ namespace ida_re::api {
                 return m_openai.send( messages );
             case e_provider::gemini :
                 return m_gemini.send( messages );
+            case e_provider::openrouter :
+                return m_openrouter.send( messages );
         }
         return response_t { .m_error = "Unknown provider" };
     }
@@ -603,6 +852,9 @@ namespace ida_re::api {
             case e_provider::gemini :
                 m_gemini.stream( message, cb );
                 break;
+            case e_provider::openrouter :
+                m_openrouter.stream( message, cb );
+                break;
         }
     }
 
@@ -610,6 +862,7 @@ namespace ida_re::api {
         auto claude_models = c_claude::models( );
         auto openai_models = c_openai::models( );
         auto gemini_models = c_gemini::models( );
+        // Note: OpenRouter models are fetched dynamically, not included in all_models()
         claude_models.insert( claude_models.end( ), openai_models.begin( ), openai_models.end( ) );
         claude_models.insert( claude_models.end( ), gemini_models.begin( ), gemini_models.end( ) );
         return claude_models;

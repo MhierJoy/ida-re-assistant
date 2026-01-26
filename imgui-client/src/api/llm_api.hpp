@@ -4,7 +4,8 @@ namespace ida_re::api {
     enum class e_provider {
         claude,
         openai,
-        gemini
+        gemini,
+        openrouter
     };
 
     constexpr std::string_view to_string( e_provider p ) noexcept {
@@ -15,6 +16,8 @@ namespace ida_re::api {
                 return "openai";
             case e_provider::gemini :
                 return "gemini";
+            case e_provider::openrouter :
+                return "openrouter";
             default :
                 return "unknown";
         }
@@ -234,6 +237,48 @@ namespace ida_re::api {
         std::string get_url( bool stream ) const;
     };
 
+    // OpenRouter (multi-model aggregator)
+    class c_openrouter : public c_client_base< c_openrouter > {
+      public:
+        c_openrouter( ) {
+            m_config.m_model = "mistralai/devstral-small:free";
+        }
+
+        response_t send( std::string_view message );
+        response_t send( const std::vector< message_t > &messages );
+        void       stream( std::string_view message, stream_callback_t cb );
+        void       stream( const std::vector< message_t > &messages, stream_callback_t cb );
+
+        [[nodiscard]] static consteval e_provider provider( ) noexcept {
+            return e_provider::openrouter;
+        }
+
+        // Dynamic model fetching
+        [[nodiscard]] std::vector< model_t > fetch_models( bool force_refresh = false );
+        [[nodiscard]] const std::vector< model_t > &cached_models( ) const noexcept {
+            return m_cached_models;
+        }
+
+        void set_show_free_only( bool free_only ) noexcept {
+            m_show_free_only = free_only;
+        }
+
+        [[nodiscard]] bool show_free_only( ) const noexcept {
+            return m_show_free_only;
+        }
+
+      private:
+        response_t                                        request( const json_t &body );
+        void                                              stream_request( const json_t &body, stream_callback_t cb );
+        json_t                                            make_body( const std::vector< message_t > &msgs, bool stream ) const;
+        std::vector< model_t >                            parse_models_response( const json_t &data );
+
+        std::vector< model_t >                            m_cached_models { };
+        std::chrono::steady_clock::time_point             m_models_fetched_at { };
+        bool                                              m_show_free_only { true };
+        static constexpr std::chrono::minutes             k_cache_duration { 30 };
+    };
+
     // Manager
     class c_llm_manager {
       public:
@@ -259,6 +304,10 @@ namespace ida_re::api {
             return m_gemini;
         }
 
+        [[nodiscard]] c_openrouter &openrouter( ) noexcept {
+            return m_openrouter;
+        }
+
         response_t send( std::string_view message );
         response_t send( const std::vector< message_t > &messages );
         void       stream( std::string_view message, stream_callback_t cb );
@@ -272,10 +321,11 @@ namespace ida_re::api {
         response_t suggest_name( std::string_view pseudocode );
 
       private:
-        e_provider m_provider { e_provider::claude };
-        c_claude   m_claude { };
-        c_openai   m_openai { };
-        c_gemini   m_gemini { };
+        e_provider   m_provider { e_provider::claude };
+        c_claude     m_claude { };
+        c_openai     m_openai { };
+        c_gemini     m_gemini { };
+        c_openrouter m_openrouter { };
     };
 
 } // namespace ida_re::api

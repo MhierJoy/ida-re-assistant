@@ -155,10 +155,15 @@ namespace ida_re::ui {
         int  m_current_tab { 0 };
 
         // settings state
-        int  m_selected_provider { 2 }; // 0=Claude, 1=OpenAI, 2=Gemini
+        int  m_selected_provider { 2 }; // 0=Claude, 1=OpenAI, 2=Gemini, 3=OpenRouter
         char m_claude_key_buf[ 256 ] { };
         char m_openai_key_buf[ 256 ] { };
         char m_gemini_key_buf[ 256 ] { };
+        char m_openrouter_key_buf[ 256 ] { };
+        char m_openrouter_model_filter[ 128 ] { };
+        int  m_openrouter_selected_model { 0 };
+        bool m_openrouter_free_only { true };
+        bool m_openrouter_models_fetched { false };
         char m_mcp_host_buf[ 64 ] { "127.0.0.1" };
         int  m_mcp_port_buf { 13120 };
         bool m_settings_initialized { false };

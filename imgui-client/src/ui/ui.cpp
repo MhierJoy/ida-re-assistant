@@ -890,19 +890,23 @@ namespace ida_re::ui {
                     m_selected_provider = 1;
                 else if ( m_config->m_provider == "gemini" )
                     m_selected_provider = 2;
+                else if ( m_config->m_provider == "openrouter" )
+                    m_selected_provider = 3;
 
                 strncpy( m_claude_key_buf, m_config->m_claude_api_key.c_str( ), sizeof( m_claude_key_buf ) - 1 );
                 strncpy( m_openai_key_buf, m_config->m_openai_api_key.c_str( ), sizeof( m_openai_key_buf ) - 1 );
                 strncpy( m_gemini_key_buf, m_config->m_gemini_api_key.c_str( ), sizeof( m_gemini_key_buf ) - 1 );
+                strncpy( m_openrouter_key_buf, m_config->m_openrouter_api_key.c_str( ), sizeof( m_openrouter_key_buf ) - 1 );
                 strncpy( m_mcp_host_buf, m_config->m_mcp_host.c_str( ), sizeof( m_mcp_host_buf ) - 1 );
-                m_mcp_port_buf         = m_config->m_mcp_port;
-                m_settings_initialized = true;
+                m_mcp_port_buf          = m_config->m_mcp_port;
+                m_openrouter_free_only  = m_config->m_openrouter_free_only;
+                m_settings_initialized  = true;
             }
 
             ImGui::Text( "LLM Provider" );
             ImGui::Separator( );
 
-            static constexpr std::array providers = { "Claude (Anthropic)", "OpenAI (ChatGPT)", "Gemini (Google)" };
+            static constexpr std::array providers = { "Claude (Anthropic)", "OpenAI (ChatGPT)", "Gemini (Google)", "OpenRouter (Multi-LLM)" };
             ImGui::Combo( "Provider", &m_selected_provider, providers.data( ), static_cast< int >( providers.size( ) ) );
 
             // Model selection based on provider
@@ -939,7 +943,7 @@ namespace ida_re::ui {
                     if ( m_config )
                         m_config->m_model = openai_models[ selected_model ];
                 }
-            } else { // Gemini
+            } else if ( m_selected_provider == 2 ) { // Gemini
                 static constexpr std::array gemini_models
                     = { "gemini-2.0-flash-exp", "gemini-exp-1206", "gemini-1.5-pro", "gemini-1.5-flash" };
                 static int selected_model = 0;
@@ -954,6 +958,87 @@ namespace ida_re::ui {
                 if ( ImGui::Combo( "##model", &selected_model, gemini_models.data( ), static_cast< int >( gemini_models.size( ) ) ) ) {
                     if ( m_config )
                         m_config->m_model = gemini_models[ selected_model ];
+                }
+            } else { // OpenRouter
+                // Fetch models on first visit or refresh
+                if ( !m_openrouter_models_fetched && m_llm ) {
+                    m_llm->openrouter( ).set_show_free_only( m_openrouter_free_only );
+                    m_llm->openrouter( ).fetch_models( );
+                    m_openrouter_models_fetched = true;
+                }
+
+                const auto &models = m_llm ? m_llm->openrouter( ).cached_models( ) : std::vector< api::model_t >{ };
+
+                // Free models filter checkbox
+                if ( ImGui::Checkbox( "Free models only", &m_openrouter_free_only ) ) {
+                    if ( m_llm ) {
+                        m_llm->openrouter( ).set_show_free_only( m_openrouter_free_only );
+                        m_llm->openrouter( ).fetch_models( true ); // Force refresh
+                    }
+                    m_openrouter_selected_model = 0;
+                    if ( m_config )
+                        m_config->m_openrouter_free_only = m_openrouter_free_only;
+                }
+
+                ImGui::SameLine( );
+                if ( ImGui::Button( "Refresh" ) && m_llm ) {
+                    m_llm->openrouter( ).fetch_models( true );
+                    m_openrouter_selected_model = 0;
+                }
+
+                // Model filter
+                ImGui::SetNextItemWidth( -1 );
+                ImGui::InputTextWithHint( "##model_filter", "Search models...", m_openrouter_model_filter, sizeof( m_openrouter_model_filter ) );
+
+                // Model list with filter
+                if ( !models.empty( ) ) {
+                    std::string filter_lower = m_openrouter_model_filter;
+                    std::transform( filter_lower.begin( ), filter_lower.end( ), filter_lower.begin( ), ::tolower );
+
+                    std::vector< const api::model_t * > filtered;
+                    for ( const auto &model : models ) {
+                        std::string name_lower = model.m_name;
+                        std::string id_lower   = model.m_id;
+                        std::transform( name_lower.begin( ), name_lower.end( ), name_lower.begin( ), ::tolower );
+                        std::transform( id_lower.begin( ), id_lower.end( ), id_lower.begin( ), ::tolower );
+                        if ( filter_lower.empty( ) || name_lower.find( filter_lower ) != std::string::npos
+                             || id_lower.find( filter_lower ) != std::string::npos ) {
+                            filtered.push_back( &model );
+                        }
+                    }
+
+                    // Combo with filtered models
+                    if ( ImGui::BeginCombo( "##openrouter_model",
+                             m_openrouter_selected_model < ( int ) filtered.size( ) ? filtered[ m_openrouter_selected_model ]->m_name.c_str( )
+                                                                                    : "Select model..." ) ) {
+                        for ( int i = 0; i < ( int ) filtered.size( ); i++ ) {
+                            bool        is_selected = ( m_openrouter_selected_model == i );
+                            std::string label       = filtered[ i ]->m_name;
+                            if ( filtered[ i ]->m_id.ends_with( ":free" ) )
+                                label += " [FREE]";
+
+                            if ( ImGui::Selectable( label.c_str( ), is_selected ) ) {
+                                m_openrouter_selected_model = i;
+                                if ( m_config )
+                                    m_config->m_model = filtered[ i ]->m_id;
+                            }
+                            if ( is_selected )
+                                ImGui::SetItemDefaultFocus( );
+
+                            // Tooltip with model details
+                            if ( ImGui::IsItemHovered( ) ) {
+                                ImGui::BeginTooltip( );
+                                ImGui::Text( "ID: %s", filtered[ i ]->m_id.c_str( ) );
+                                ImGui::Text( "Context: %d tokens", filtered[ i ]->m_context_window );
+                                ImGui::EndTooltip( );
+                            }
+                        }
+                        ImGui::EndCombo( );
+                    }
+
+                    ImGui::TextDisabled( "%zu models available", filtered.size( ) );
+                } else {
+                    ImGui::TextDisabled( "No models loaded. Click Refresh." );
                 }
             }
 
@@ -972,6 +1057,18 @@ namespace ida_re::ui {
             ImGui::Text( "Gemini API Key:" );
             ImGui::SetNextItemWidth( -1 );
             ImGui::InputText( "##gemini_key", m_gemini_key_buf, sizeof( m_gemini_key_buf ), ImGuiInputTextFlags_Password );
+
+            ImGui::Text( "OpenRouter API Key:" );
+            ImGui::SetNextItemWidth( -1 );
+            ImGui::InputText( "##openrouter_key", m_openrouter_key_buf, sizeof( m_openrouter_key_buf ), ImGuiInputTextFlags_Password );
+            ImGui::SameLine( );
+            ImGui::TextDisabled( "(?)" );
+            if ( ImGui::IsItemHovered( ) ) {
+                ImGui::BeginTooltip( );
+                ImGui::Text( "Get your key at: https://openrouter.ai/keys" );
+                ImGui::Text( "Free models available without payment!" );
+                ImGui::EndTooltip( );
+            }
 
             ImGui::Spacing( );
             ImGui::Text( "MCP Connection" );
@@ -1030,11 +1127,12 @@ namespace ida_re::ui {
 
             if ( ImGui::Button( "Save Settings", ImVec2( 120, 0 ) ) ) {
                 if ( m_config ) {
-                    m_config->m_claude_api_key = m_claude_key_buf;
-                    m_config->m_openai_api_key = m_openai_key_buf;
-                    m_config->m_gemini_api_key = m_gemini_key_buf;
-                    m_config->m_mcp_host       = m_mcp_host_buf;
-                    m_config->m_mcp_port       = m_mcp_port_buf;
+                    m_config->m_claude_api_key     = m_claude_key_buf;
+                    m_config->m_openai_api_key     = m_openai_key_buf;
+                    m_config->m_gemini_api_key     = m_gemini_key_buf;
+                    m_config->m_openrouter_api_key = m_openrouter_key_buf;
+                    m_config->m_mcp_host           = m_mcp_host_buf;
+                    m_config->m_mcp_port           = m_mcp_port_buf;
 
                     if ( m_selected_provider == 0 )
                         m_config->m_provider = "claude";
@@ -1042,6 +1140,8 @@ namespace ida_re::ui {
                         m_config->m_provider = "openai";
                     else if ( m_selected_provider == 2 )
                         m_config->m_provider = "gemini";
+                    else if ( m_selected_provider == 3 )
+                        m_config->m_provider = "openrouter";
 
                     m_config->save( );
                     apply_config_to_llm( );
@@ -1052,13 +1152,14 @@ namespace ida_re::ui {
 
             if ( ImGui::Button( "Reset to Defaults", ImVec2( 140, 0 ) ) ) {
                 if ( m_config ) {
-                    m_config->m_provider       = "gemini";
-                    m_config->m_model          = "gemini-2.0-flash-exp";
-                    m_config->m_claude_api_key = "";
-                    m_config->m_openai_api_key = "";
-                    m_config->m_gemini_api_key = "";
-                    m_selected_provider        = 2;
-                    m_settings_initialized     = false;
+                    m_config->m_provider           = "gemini";
+                    m_config->m_model              = "gemini-2.0-flash-exp";
+                    m_config->m_claude_api_key     = "";
+                    m_config->m_openai_api_key     = "";
+                    m_config->m_gemini_api_key     = "";
+                    m_config->m_openrouter_api_key = "";
+                    m_selected_provider            = 2;
+                    m_settings_initialized         = false;
                 }
             }
         }
@@ -1186,7 +1287,7 @@ namespace ida_re::ui {
         if ( !m_llm || !m_config )
             return;
 
-        api::e_provider provider;
+        api::e_provider provider = api::e_provider::gemini; // default
 
         if ( m_config->m_provider == "claude" ) {
             provider = api::e_provider::claude;
@@ -1200,6 +1301,11 @@ namespace ida_re::ui {
             provider = api::e_provider::gemini;
             m_llm->gemini( ).set_api_key( m_config->m_gemini_api_key );
             m_llm->gemini( ).set_model( m_config->m_model );
+        } else if ( m_config->m_provider == "openrouter" ) {
+            provider = api::e_provider::openrouter;
+            m_llm->openrouter( ).set_api_key( m_config->m_openrouter_api_key );
+            m_llm->openrouter( ).set_model( m_config->m_model );
+            m_llm->openrouter( ).set_show_free_only( m_config->m_openrouter_free_only );
         }
 
         m_llm->set_provider( provider );
